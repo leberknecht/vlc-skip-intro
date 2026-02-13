@@ -14,6 +14,7 @@ import sys
 import sqlite3
 import os
 import struct
+import tmdb_lookup
 from scipy.signal import correlate
 
 # Configuration
@@ -40,6 +41,7 @@ cursor.execute("""
             start_time REAL NOT NULL,
             end_time REAL NOT NULL,
             correlation_score REAL NOT NULL,
+            tmdb_id TEXT,
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     """)
@@ -118,11 +120,13 @@ def save_intro_timestamps(video_path, start_time, end_time, correlation_score, m
 
     file_name = str(os.path.basename(video_path))
 
+    tmdb_id = tmdb_lookup.find_tmdb_id(video_path)
+
     # Insert or replace the record for this video
     cursor.execute("""
-        INSERT INTO intro_timestamps (file_name, movie_hash, file_size, start_time, end_time, correlation_score, outro_length)
+        INSERT INTO intro_timestamps (file_name, movie_hash, file_size, start_time, end_time, correlation_score, outro_length, tmdb_id)
         VALUES (?, ?, ?, ?, ?, ?, ?)
-    """, (file_name, movie_hash, file_size, start_time, end_time, correlation_score, outro_length))
+    """, (file_name, movie_hash, file_size, start_time, end_time, correlation_score, outro_length, tmdb_id))
 
     conn.commit()
     conn.close()

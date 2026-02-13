@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
+import argparse
 import os
 import re
+import sqlite3
 import sys
 import requests
 
 TMDB_API_BASE = "https://api.themoviedb.org/3"
+DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "intro_timestamps.db")
 
 def get_auth_header():
     token = os.environ.get("TMDB_API_TOKEN")
@@ -113,82 +116,99 @@ def find_tmdb_id(filepath):
     parsed = parse_filename(filepath)
 
     print(f"Parsed: {parsed}", file=sys.stderr)
-
+    tmdb_id = None
     if parsed["type"] == "tv":
         results = search_tv_show(headers, parsed["title"])
         if results:
             best = results[0]
-            return {
-                "type": "tv",
-                "id": best["id"],
-                "name": best.get("name", best.get("original_name")),
-                "first_air_date": best.get("first_air_date"),
-                "season": parsed["season"],
-                "episode": parsed["episode"],
-                "confidence": "high" if len(results) == 1 else "medium"
-            }
+            if best["season"] and best["episode"]:
+                fields = ['id', 'season', 'episode']
+                tmdb_id = ':'.join([str(best[x]) for x in fields])
+            else:
+                tmdb_id = best["id"]
+            return tmdb_id
 
     elif parsed["type"] == "movie":
         results = search_movie(headers, parsed["title"], parsed.get("year"))
         if results:
             best = results[0]
-            return {
-                "type": "movie",
-                "id": best["id"],
-                "title": best.get("title", best.get("original_title")),
-                "release_date": best.get("release_date"),
-                "confidence": "high" if len(results) == 1 else "medium"
-            }
-
+            return best['id']
     else:
         # Unknown type, try multi-search
         results = search_multi(headers, parsed["title"])
         if results:
             best = results[0]
-            media_type = best.get("media_type")
-            if media_type == "tv":
-                return {
-                    "type": "tv",
-                    "id": best["id"],
-                    "name": best.get("name", best.get("original_name")),
-                    "first_air_date": best.get("first_air_date"),
-                    "confidence": "low"
-                }
-            elif media_type == "movie":
-                return {
-                    "type": "movie",
-                    "id": best["id"],
-                    "title": best.get("title", best.get("original_title")),
-                    "release_date": best.get("release_date"),
-                    "confidence": "low"
-                }
-
+            best = results[0]
+            if best["season"] and best["episode"]:
+                fields = ['id', 'season', 'episode']
+                tmdb_id = ':'.join([str(best[x]) for x in fields])
+            else:
+                tmdb_id = best["id"]
+            return tmdb_id
     return None
 
-def main():
-    if len(sys.argv) < 2:
-        print(f"Usage: {sys.argv[0]} <filename>", file=sys.stderr)
-        print(f"Example: {sys.argv[0]} '/path/to/Star Trek - Voyager S03E01.mp4'", file=sys.stderr)
+def update_database():
+    """Update all rows in intro_timestamps.db with TMDB IDs."""
+    if not os.path.exists(DB_PATH):
+        print(f"Error: Database not found at {DB_PATH}", file=sys.stderr)
         sys.exit(1)
 
-    filepath = sys.argv[1]
-    result = find_tmdb_id(filepath)
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+
+    # Get all rows that don't have a tmdb_id yet
+    cursor.execute("SELECT id, file_name FROM intro_timestamps WHERE tmdb_id IS NULL")
+    rows = cursor.fetchall()
+
+    if not rows:
+        print("No rows without tmdb_id found.")
+        return
+
+    print(f"Processing {len(rows)} rows...")
+    updated = 0
+    failed = 0
+
+    for row_id, file_name in rows:
+        print(f"\nLooking up: {file_name}")
+        try:
+            result = find_tmdb_id(file_name)
+            if result:
+                cursor.execute(
+                    "UPDATE intro_timestamps SET tmdb_id = ? WHERE id = ?",
+                    (result, row_id)
+                )
+                conn.commit()
+                print(f"  -> Found TMDB id: {result})")
+                updated += 1
+            else:
+                print("  -> No match found")
+                failed += 1
+        except Exception as e:
+            print(f"  -> Error: {e}", file=sys.stderr)
+            failed += 1
+
+    conn.close()
+    print(f"\nDone. Updated: {updated}, Failed: {failed}")
+
+def main():
+    parser = argparse.ArgumentParser(description="Look up TMDB IDs for media files")
+    parser.add_argument("filename", nargs="?", help="Path to the media file")
+    parser.add_argument("--update-db", action="store_true",
+                        help="Update all rows in intro_timestamps.db with TMDB IDs")
+    args = parser.parse_args()
+
+    if args.update_db:
+        update_database()
+        return
+
+    if not args.filename:
+        parser.print_help()
+        sys.exit(1)
+
+    result = find_tmdb_id(args.filename)
 
     if result:
-        print(f"TMDB ID: {result['id']}")
-        print(f"Type: {result['type']}")
-        if result['type'] == 'tv':
-            print(f"Name: {result.get('name')}")
-            print(f"First Air Date: {result.get('first_air_date')}")
-            if 'season' in result:
-                print(f"Season: {result['season']}")
-                print(f"Episode: {result['episode']}")
-        else:
-            print(f"Title: {result.get('title')}")
-            print(f"Release Date: {result.get('release_date')}")
-        print(f"Confidence: {result['confidence']}")
-    else:
-        print("No match found", file=sys.stderr)
+        print(f"TMDB ID: {result}")
         sys.exit(1)
 
 if __name__ == "__main__":
