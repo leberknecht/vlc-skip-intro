@@ -3,17 +3,16 @@ import os
 import re
 import sys
 import requests
-from urllib.parse import quote
 
 TMDB_API_BASE = "https://api.themoviedb.org/3"
 
-def get_api_key():
-    api_key = os.environ.get("TMDB_API_KEY")
-    if not api_key:
-        print("Error: TMDB_API_KEY environment variable not set", file=sys.stderr)
-        print("Get your API key at https://www.themoviedb.org/settings/api", file=sys.stderr)
+def get_auth_header():
+    token = os.environ.get("TMDB_API_TOKEN")
+    if not token:
+        print("Error: TMDB_API_TOKEN environment variable not set", file=sys.stderr)
+        print("Get your API Read Access Token at https://www.themoviedb.org/settings/api", file=sys.stderr)
         sys.exit(1)
-    return api_key
+    return {"Authorization": f"Bearer {token}"}
 
 def parse_filename(filepath):
     """Parse a filename to extract show/movie info."""
@@ -82,41 +81,41 @@ def clean_title(title):
     title = title.strip(' -')
     return title
 
-def search_tv_show(api_key, title):
+def search_tv_show(headers, title):
     """Search for a TV show and return matches."""
     url = f"{TMDB_API_BASE}/search/tv"
-    params = {"api_key": api_key, "query": title}
-    response = requests.get(url, params=params)
+    params = {"query": title}
+    response = requests.get(url, params=params, headers=headers)
     response.raise_for_status()
     return response.json().get("results", [])
 
-def search_movie(api_key, title, year=None):
+def search_movie(headers, title, year=None):
     """Search for a movie and return matches."""
     url = f"{TMDB_API_BASE}/search/movie"
-    params = {"api_key": api_key, "query": title}
+    params = {"query": title}
     if year:
         params["year"] = year
-    response = requests.get(url, params=params)
+    response = requests.get(url, params=params, headers=headers)
     response.raise_for_status()
     return response.json().get("results", [])
 
-def search_multi(api_key, title):
+def search_multi(headers, title):
     """Search across all types."""
     url = f"{TMDB_API_BASE}/search/multi"
-    params = {"api_key": api_key, "query": title}
-    response = requests.get(url, params=params)
+    params = {"query": title}
+    response = requests.get(url, params=params, headers=headers)
     response.raise_for_status()
     return response.json().get("results", [])
 
 def find_tmdb_id(filepath):
     """Find the TMDB ID for a given file."""
-    api_key = get_api_key()
+    headers = get_auth_header()
     parsed = parse_filename(filepath)
 
     print(f"Parsed: {parsed}", file=sys.stderr)
 
     if parsed["type"] == "tv":
-        results = search_tv_show(api_key, parsed["title"])
+        results = search_tv_show(headers, parsed["title"])
         if results:
             best = results[0]
             return {
@@ -130,7 +129,7 @@ def find_tmdb_id(filepath):
             }
 
     elif parsed["type"] == "movie":
-        results = search_movie(api_key, parsed["title"], parsed.get("year"))
+        results = search_movie(headers, parsed["title"], parsed.get("year"))
         if results:
             best = results[0]
             return {
@@ -143,7 +142,7 @@ def find_tmdb_id(filepath):
 
     else:
         # Unknown type, try multi-search
-        results = search_multi(api_key, parsed["title"])
+        results = search_multi(headers, parsed["title"])
         if results:
             best = results[0]
             media_type = best.get("media_type")

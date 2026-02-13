@@ -47,3 +47,4 @@ intro_timestamps.db
 intro_timestamps_cache.json
 
 intro-sequences/*
+.env

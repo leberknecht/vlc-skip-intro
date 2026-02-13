@@ -6,17 +6,25 @@ The goal of this vibe-coded ball-of-mud is to enable VLC to skip intro sequences
 The crap-code uses a simple sqlite DB for storing the timestamps, unfortunately LUA has no build-in support for sqlite, so we need to dump that to CSV for the VLC-Plugin. 
 The whole flow
 
-1. extract a audio intro sequence. Watch the video, find the timestamps, then do something like
+1. extract an audio intro sequence. Watch the video, find the timestamps, then do something like
 ```shell
-ffmpeg -i ~/video/my-fav-series/s01e42.mkv -ss 00:07:45 -t 00:00:35 -q:a 0 -map 0:1 intro-sequences/my-fav-series-season-01.wav
+make create-intro-snippet FILENAME=<path to one episode> START=02:23 END=04:42 OUTPUT=intro-sequences/my-series-season1.wav
 ```
 2. Now that we have the WAV, lets fire it against the whole series:
 ```shell
-bash scan-dir.sh ~/video/my-fav-series/ intro-sequences/my-fav-series-season-01.wav
+make scan-dir PATHNAME=/media/nfs-series/voyager-season-1/ INTRO_SEQUENCE=intro-sequences/my-series-season1.wav
 ```
 This will iterate over the files and try to find the audio sequence in it. 
 3. Dump to csv and install the plugin
 ```shell
-python3 vlc-plugin/export_db_cache.py intro_timestamps.db
-
+make update-plugin
+make update-db
 ```
+
+I'm not quite sure if there is more what you need to do, as claude also created a `bash vlc-plugin/enable_permanent.sh` script, which apparently adds these to lines to `~/.config/vlc/vlcrc`
+```
+extraintf=luaintf
+lua-intf=skip_intro
+```
+
+..but hey, whatever, worksonmymachine :shrug:
