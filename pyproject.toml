@@ -1,0 +1,59 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vlc-skip-intro"
+version = "1.0.0"
+description = "Detect and store intro timestamps in video files"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [
+    {name = "VLC Skip Intro"}
+]
+keywords = ["video", "intro", "detection", "opensubtitles", "vlc"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: End Users/Desktop",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+dependencies = [
+    "opencv-python>=4.8.0",
+    "scikit-image>=0.21.0",
+    "imagehash>=4.3.1",
+    "click>=8.1.0",
+    "numpy>=2.0.0,<2.4",
+    "Pillow>=10.0.0",
+    "pydub>=0.25.1",
+    "librosa>=0.10.0",
+    "av>=12.0.0",
+]
+
+[project.scripts]
+vlc-skip-intro = "vlc_skip_intro.cli:main"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+]
+# Note: PyTorch with ROCm must be installed from PyTorch index:
+# uv pip install torch torchvision --index-url https://download.pytorch.org/whl/rocm6.2
+rocm = [
+    # Placeholder - actual install requires special index URL (see above)
+]
+# Note: CUDA support requires OpenCV compiled with CUDA (must build from source)
+cuda = [
+    # Placeholder - requires opencv-contrib-python with CUDA
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["vlc_skip_intro*"]
+exclude = ["tests*"]
