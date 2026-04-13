@@ -27,7 +27,7 @@ CORRELATION_THRESHOLD = 0.8  # Correlation coefficient threshold (0-1)
 REFINEMENT_TRIGGER = 0.42  # Trigger fine-grained search when correlation > this
 REFINEMENT_THRESHOLD = 0.8  # Stop when fine-grained search finds correlation > this
 REFINEMENT_WINDOW = 15  # seconds before/after to search in fine-grained mode
-REFINEMENT_INTERVAL = 0.5  # seconds to slide in fine-grained mode
+REFINEMENT_INTERVAL = 0.4  # seconds to slide in fine-grained mode
 
 db_path="intro_timestamps.db"
 conn = sqlite3.connect(db_path)
@@ -125,7 +125,7 @@ def save_intro_timestamps(video_path, start_time, end_time, correlation_score, m
     # Insert or replace the record for this video
     cursor.execute("""
         INSERT INTO intro_timestamps (file_name, movie_hash, file_size, start_time, end_time, correlation_score, outro_length, tmdb_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     """, (file_name, movie_hash, file_size, start_time, end_time, correlation_score, outro_length, tmdb_id))
 
     conn.commit()

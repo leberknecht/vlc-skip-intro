@@ -12,8 +12,8 @@ DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "intro_timest
 def get_auth_header():
     token = os.environ.get("TMDB_API_TOKEN")
     if not token:
-        print("Error: TMDB_API_TOKEN environment variable not set", file=sys.stderr)
-        print("Get your API Read Access Token at https://www.themoviedb.org/settings/api", file=sys.stderr)
+        print("Error: TMDB_API_TOKEN environment variable not set")
+        print("Get your API Read Access Token at https://www.themoviedb.org/settings/api")
         sys.exit(1)
     return {"Authorization": f"Bearer {token}"}
 
@@ -115,42 +115,33 @@ def find_tmdb_id(filepath):
     headers = get_auth_header()
     parsed = parse_filename(filepath)
 
-    print(f"Parsed: {parsed}", file=sys.stderr)
+    print(f"Parsed: {parsed}")
+    best = None
     tmdb_id = None
     if parsed["type"] == "tv":
         results = search_tv_show(headers, parsed["title"])
         if results:
             best = results[0]
-            if best["season"] and best["episode"]:
-                fields = ['id', 'season', 'episode']
-                tmdb_id = ':'.join([str(best[x]) for x in fields])
-            else:
-                tmdb_id = best["id"]
-            return tmdb_id
-
     elif parsed["type"] == "movie":
         results = search_movie(headers, parsed["title"], parsed.get("year"))
         if results:
             best = results[0]
-            return best['id']
     else:
         # Unknown type, try multi-search
         results = search_multi(headers, parsed["title"])
         if results:
             best = results[0]
-            best = results[0]
-            if best["season"] and best["episode"]:
-                fields = ['id', 'season', 'episode']
-                tmdb_id = ':'.join([str(best[x]) for x in fields])
-            else:
-                tmdb_id = best["id"]
-            return tmdb_id
-    return None
+    if best:
+        tmdb_id = best['id']
+        if 'season' in parsed and 'episode' in parsed:
+            tmdb_id = f'{tmdb_id}:{parsed["season"]}:{parsed["episode"]}'
+    print(f"TMDB ID: {tmdb_id}")
+    return tmdb_id
 
 def update_database():
     """Update all rows in intro_timestamps.db with TMDB IDs."""
     if not os.path.exists(DB_PATH):
-        print(f"Error: Database not found at {DB_PATH}", file=sys.stderr)
+        print(f"Error: Database not found at {DB_PATH}")
         sys.exit(1)
 
     conn = sqlite3.connect(DB_PATH)
@@ -184,7 +175,7 @@ def update_database():
                 print("  -> No match found")
                 failed += 1
         except Exception as e:
-            print(f"  -> Error: {e}", file=sys.stderr)
+            print(f"  -> Error: {e}")
             failed += 1
 
     conn.close()
