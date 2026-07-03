@@ -319,7 +319,7 @@ def extract_audio_snippet(video_path, start_time, duration, sr=SAMPLE_RATE):
         return None
 
 
-def refine_match_location(video_path, intro_features, coarse_match_time, intro_duration):
+def refine_match_location(video_path, intro_features, coarse_match_time, intro_duration, interval=REFINEMENT_INTERVAL):
     """
     Perform fine-grained search around a coarse match location.
 
@@ -334,7 +334,7 @@ def refine_match_location(video_path, intro_features, coarse_match_time, intro_d
     """
     # Extract a snippet around the coarse match
     snippet_start = coarse_match_time - REFINEMENT_WINDOW
-    snippet_duration = 2 * REFINEMENT_WINDOW + intro_duration + REFINEMENT_INTERVAL
+    snippet_duration = 2 * REFINEMENT_WINDOW + intro_duration + interval
 
     print(f"\n  → Refining search around {format_timestamp(coarse_match_time)}...")
     print(f"     Extracting snippet: {format_timestamp(max(0, snippet_start))} - {format_timestamp(snippet_start + snippet_duration)}")
@@ -387,7 +387,7 @@ def refine_match_location(video_path, intro_features, coarse_match_time, intro_d
                     print(f"     ✓ Strong match found!")
                     break
 
-        window_start += REFINEMENT_INTERVAL
+        window_start += interval
 
     return best_time, best_score
 
@@ -479,6 +479,27 @@ def find_intro_in_video(video_path, intro_audio_path, movie_hash, file_size, cor
                 return best_match_time, max_corr_score
 
     # Finished scanning without finding match above threshold
+    # Last resort: refine around the best coarse match we saw
+    if best_match_time is not None and best_match_score < correlation_threshold:
+        print(f"\n  No match above threshold, attempting refinement on best coarse match at {format_timestamp(best_match_time)} ({best_match_score:.4f})...")
+        refined_time, refined_score = refine_match_location(
+            video_path, intro_features, best_match_time, intro_duration,
+            interval=REFINEMENT_INTERVAL / 2
+        )
+
+        if refined_score >= correlation_threshold:
+            best_match_score = refined_score
+            best_match_time = refined_time
+            print(f"\n✓ MATCH FOUND (after last-resort refinement)!")
+            print(f"  Timestamp: {format_timestamp(best_match_time)}")
+            print(f"  Correlation: {best_match_score:.4f}")
+
+            end_time = best_match_time + intro_duration
+            save_intro_timestamps(video_path, best_match_time, end_time, best_match_score,
+                                  movie_hash, file_size, outro_length)
+
+            return best_match_time, best_match_score
+
     if best_match_time is not None:
         print(f"\n✗ No match above threshold")
         print(f"  Best match: {format_timestamp(best_match_time)} (correlation: {best_match_score:.4f})")
@@ -509,6 +530,11 @@ if __name__ == "__main__":
         default=0,
         help="Length of outro in seconds (default: 0, disabled)"
     )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Re-process files even if already known, overwriting existing data"
+    )
 
     args = parser.parse_args()
 
@@ -520,8 +546,12 @@ if __name__ == "__main__":
     cursor.execute("SELECT COUNT(*) FROM intro_timestamps WHERE file_name = ? or movie_hash = ?", (file_name, movie_hash))
     count = int(cursor.fetchone()[0])
     if count != 0:
-        print(f'file already known, skipping')
-        exit(0)
+        if not args.force:
+            print(f'file already known, skipping')
+            exit(0)
+        print(f'file already known, re-processing (--force)')
+        cursor.execute("DELETE FROM intro_timestamps WHERE file_name = ? or movie_hash = ?", (file_name, movie_hash))
+        conn.commit()
 
     # Run detection
     timestamp, score = find_intro_in_video(
